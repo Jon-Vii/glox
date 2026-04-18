@@ -1,0 +1,21 @@
+# Built binary for this repo
+/go-tree-walk-interpreter
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Coverage output
+*.out
+coverage.out
+
+# Common local build directories
+/bin/
+/dist/
+
+# macOS
+.DS_Store
