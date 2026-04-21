@@ -6,7 +6,17 @@ type parser struct {
 }
 
 func (p *parser) parse() expr {
-	return p.expression()
+	expr := p.expression()
+
+	if expr == nil {
+		return nil
+	}
+	if !p.isAtEnd() {
+		p.parseError(p.peek(), "expect end of expression")
+		return nil
+	}
+
+	return expr
 }
 
 func (p *parser) expression() expr {

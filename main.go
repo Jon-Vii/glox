@@ -25,6 +25,8 @@ func main() {
 }
 
 func run(source string) {
+	hadError = false
+
 	scanner := scanner{
 		source: source,
 		line:   1,
@@ -42,12 +44,15 @@ func run(source string) {
 	}
 
 	expr := parser.parse()
-
-	if hadError {
+	if hadError || expr == nil {
 		return
 	}
-
-	fmt.Printf("%T %#v\n", expr, expr)
+	intr := interpreter{}
+	if err := intr.interpret(expr); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+	/*
+		fmt.Printf("%T %#v\n", expr, expr)*/
 
 }
 
