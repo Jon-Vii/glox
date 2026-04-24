@@ -24,7 +24,7 @@ func main() {
 	}
 }
 
-func run(source string) {
+func run(source string, intr *interpreter) {
 	hadError = false
 
 	scanner := scanner{
@@ -47,7 +47,7 @@ func run(source string) {
 	if hadError || expr == nil {
 		return
 	}
-	intr := interpreter{}
+
 	if err := intr.interpret(expr); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
@@ -62,7 +62,10 @@ func runFile(path string) error {
 		return err
 	}
 
-	run(string(bytes))
+	intr := &interpreter{
+		env: newEnvironment(),
+	}
+	run(string(bytes), intr)
 
 	if hadError {
 		return fmt.Errorf("source had syntax error(s)")
@@ -73,6 +76,9 @@ func runFile(path string) error {
 
 func runPrompt() error {
 	input := bufio.NewScanner(os.Stdin)
+	intr := &interpreter{
+		env: newEnvironment(),
+	}
 
 	for {
 		fmt.Print("> ")
@@ -82,6 +88,6 @@ func runPrompt() error {
 			return input.Err()
 		}
 
-		run(input.Text())
+		run(input.Text(), intr)
 	}
 }

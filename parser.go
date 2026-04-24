@@ -5,18 +5,87 @@ type parser struct {
 	tokens  []token
 }
 
-func (p *parser) parse() expr {
-	expr := p.expression()
+func (p *parser) parse() []stmt {
+	var statements []stmt
+	for !p.isAtEnd() {
+		stmt := p.declaration()
 
+		if stmt == nil {
+			p.synchronize()
+			continue
+		}
+
+		statements = append(statements, stmt)
+
+	}
+
+	return statements
+
+}
+
+func (p *parser) declaration() stmt {
+	if p.match(Var) {
+		return p.varDeclaration()
+	}
+	return p.statement()
+
+}
+
+func (p *parser) varDeclaration() stmt {
+	name, ok := p.consume(Identifier, "expect variable name")
+	if !ok {
+		return nil
+	}
+
+	var initializer expr = nil
+	if p.match(Equal) {
+		initializer = p.expression()
+		if initializer == nil {
+			return nil
+		}
+	}
+
+	if _, ok := p.consume(Semicolon, "expect ';' after variable declaration"); !ok {
+		return nil
+	}
+	return &varStmt{
+		name:        name,
+		initializer: initializer,
+	}
+}
+
+func (p *parser) statement() stmt {
+	if p.match(Print) {
+		return p.printStatement()
+	}
+
+	return p.expressionStatement()
+}
+
+func (p *parser) printStatement() stmt {
+	value := p.expression()
+	if value == nil {
+		return nil
+	}
+
+	_, ok := p.consume(Semicolon, "expect ';' after value")
+	if !ok {
+		return nil
+	}
+
+	return &printStmt{value}
+}
+
+func (p *parser) expressionStatement() stmt {
+	expr := p.expression()
 	if expr == nil {
 		return nil
 	}
-	if !p.isAtEnd() {
-		p.parseError(p.peek(), "expect end of expression")
+	_, ok := p.consume(Semicolon, "expect ';' after expression")
+	if !ok {
 		return nil
 	}
-
-	return expr
+	return &exprStmt{expr}
 }
 
 func (p *parser) expression() expr {
@@ -132,6 +201,10 @@ func (p *parser) primary() expr {
 
 	if p.match(Number, String) {
 		return &literal{value: p.previous().literal}
+	}
+
+	if p.match(Identifier) {
+		return &variable{name: p.previous()}
 	}
 
 	if p.match(LeftParen) {

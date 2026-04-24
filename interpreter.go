@@ -5,20 +5,53 @@ import (
 	"strconv"
 )
 
-type interpreter struct{}
+type interpreter struct {
+	env *environment
+}
 
-func (i *interpreter) interpret(e expr) error {
-	value, err := i.evaluate(e)
-	if err != nil {
-		return err
+func (i *interpreter) interpret(statements []stmt) error {
+	for _, stmt := range statements {
+		if err := i.execute(stmt); err != nil {
+			return err
+		}
 	}
-	fmt.Println(stringify(value))
 	return nil
+}
 
+func (i *interpreter) execute(stmt stmt) error {
+	switch v := stmt.(type) {
+	case *printStmt:
+		value, err := i.evaluate(v.expr)
+		if err != nil {
+			return err
+		}
+		fmt.Println(stringify(value))
+		return nil
+
+	case *exprStmt:
+		_, err := i.evaluate(v.expr)
+		return err
+	case *varStmt:
+		var value any = nil
+		if v.initializer != nil {
+			var err error
+			value, err = i.evaluate(v.initializer)
+			if err != nil {
+				return err
+			}
+		}
+
+		i.env.define(v.name.lexeme, value)
+		return nil
+	default:
+		return fmt.Errorf("unknown statement type")
+	}
 }
 
 func (i *interpreter) evaluate(e expr) (any, error) {
 	switch v := e.(type) {
+	case *variable:
+		return i.env.get(v.name)
 	case *literal:
 		return v.value, nil
 

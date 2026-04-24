@@ -28,3 +28,9 @@ type unary struct {
 }
 
 func (u *unary) isExpr() {}
+
+type variable struct {
+	name token
+}
+
+func (v *variable) isExpr() {}
