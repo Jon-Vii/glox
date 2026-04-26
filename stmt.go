@@ -20,3 +20,9 @@ type varStmt struct {
 }
 
 func (v *varStmt) isStmt() {}
+
+type blockStmt struct {
+	statements []stmt
+}
+
+func (b *blockStmt) isStmt() {}

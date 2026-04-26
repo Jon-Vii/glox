@@ -43,15 +43,45 @@ func (i *interpreter) execute(stmt stmt) error {
 
 		i.env.define(v.name.lexeme, value)
 		return nil
+	case *blockStmt:
+		return i.executeBlock(v.statements, newEnclosedEnvironment(i.env))
 	default:
 		return fmt.Errorf("unknown statement type")
 	}
+}
+
+func (i *interpreter) executeBlock(statements []stmt, env *environment) error {
+	previous := i.env
+	i.env = env
+
+	defer func() {
+		i.env = previous
+	}()
+
+	for _, stmt := range statements {
+		if err := i.execute(stmt); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (i *interpreter) evaluate(e expr) (any, error) {
 	switch v := e.(type) {
 	case *variable:
 		return i.env.get(v.name)
+	case *assign:
+		value, err := i.evaluate(v.value)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := i.env.assign(v.name, value); err != nil {
+			return nil, err
+		}
+
+		return value, nil
 	case *literal:
 		return v.value, nil
 

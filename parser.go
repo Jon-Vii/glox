@@ -58,6 +58,9 @@ func (p *parser) statement() stmt {
 	if p.match(Print) {
 		return p.printStatement()
 	}
+	if p.match(LeftBrace) {
+		return &blockStmt{statements: p.blockStatement()}
+	}
 
 	return p.expressionStatement()
 }
@@ -76,6 +79,23 @@ func (p *parser) printStatement() stmt {
 	return &printStmt{value}
 }
 
+func (p *parser) blockStatement() []stmt {
+	var statements []stmt
+
+	for !p.check(RightBrace) && !p.isAtEnd() {
+		stmt := p.declaration()
+		if stmt == nil {
+			p.synchronize()
+			continue
+		}
+
+		statements = append(statements, stmt)
+	}
+
+	p.consume(RightBrace, "Expect '}' after block")
+	return statements
+}
+
 func (p *parser) expressionStatement() stmt {
 	expr := p.expression()
 	if expr == nil {
@@ -89,7 +109,29 @@ func (p *parser) expressionStatement() stmt {
 }
 
 func (p *parser) expression() expr {
-	return p.equality()
+	return p.assignment()
+}
+
+func (p *parser) assignment() expr {
+	expr := p.equality()
+
+	if p.match(Equal) {
+		equals := p.previous()
+		value := p.assignment()
+
+		if value == nil {
+			return nil
+		}
+
+		if v, ok := expr.(*variable); ok {
+			name := v.name
+			return &assign{name: name, value: value}
+		}
+
+		p.parseError(equals, "invalid assignment target")
+		return nil
+	}
+	return expr
 }
 
 func (p *parser) equality() expr {

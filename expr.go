@@ -34,3 +34,10 @@ type variable struct {
 }
 
 func (v *variable) isExpr() {}
+
+type assign struct {
+	name  token
+	value expr
+}
+
+func (a *assign) isExpr() {}
