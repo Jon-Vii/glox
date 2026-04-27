@@ -41,3 +41,11 @@ type assign struct {
 }
 
 func (a *assign) isExpr() {}
+
+type logical struct {
+	left     expr
+	operator token
+	right    expr
+}
+
+func (l *logical) isExpr() {}

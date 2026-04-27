@@ -26,3 +26,18 @@ type blockStmt struct {
 }
 
 func (b *blockStmt) isStmt() {}
+
+type ifStmt struct {
+	condition  expr
+	thenBranch stmt
+	elseBranch stmt
+}
+
+func (i *ifStmt) isStmt() {}
+
+type whileStmt struct {
+	condition expr
+	body      stmt
+}
+
+func (w *whileStmt) isStmt() {}

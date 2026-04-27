@@ -58,11 +58,149 @@ func (p *parser) statement() stmt {
 	if p.match(Print) {
 		return p.printStatement()
 	}
+	if p.match(While) {
+		return p.whileStatement()
+	}
+	if p.match(For) {
+		return p.forStatement()
+	}
+
 	if p.match(LeftBrace) {
-		return &blockStmt{statements: p.blockStatement()}
+		statements := p.blockStatement()
+		if statements == nil {
+			return nil
+		}
+		return &blockStmt{statements: statements}
+	}
+	if p.match(If) {
+		return p.ifStatement()
 	}
 
 	return p.expressionStatement()
+}
+
+func (p *parser) forStatement() stmt {
+	if _, ok := p.consume(LeftParen, "expect '(' after 'for'"); !ok {
+		return nil
+	}
+
+	var initializer stmt
+	if p.match(Semicolon) {
+		// no initializer
+	} else if p.match(Var) {
+		initializer = p.varDeclaration()
+		if initializer == nil {
+			return nil
+		}
+
+	} else {
+		initializer = p.expressionStatement()
+		if initializer == nil {
+			return nil
+		}
+	}
+
+	var condition expr
+	if !p.check(Semicolon) {
+		condition = p.expression()
+		if condition == nil {
+			return nil
+		}
+	}
+	if _, ok := p.consume(Semicolon, "expect ';' after loop condition"); !ok {
+		return nil
+	}
+
+	var increment expr
+	if !p.check(RightParen) {
+		increment = p.expression()
+		if increment == nil {
+			return nil
+		}
+	}
+	if _, ok := p.consume(RightParen, "expect ')' after for clauses"); !ok {
+		return nil
+	}
+
+	body := p.statement()
+	if body == nil {
+		return nil
+	}
+
+	if increment != nil {
+		body = &blockStmt{
+			statements: []stmt{body,
+				&exprStmt{
+					expr: increment}}}
+	}
+
+	if condition == nil {
+		condition = &literal{value: true}
+
+	}
+
+	body = &whileStmt{
+		condition: condition,
+		body:      body}
+
+	if initializer != nil {
+		body = &blockStmt{
+			statements: []stmt{initializer, body},
+		}
+	}
+
+	return body
+}
+
+func (p *parser) whileStatement() stmt {
+	if _, ok := p.consume(LeftParen, "expect '(' after 'while'"); !ok {
+		return nil
+	}
+	condition := p.expression()
+	if condition == nil {
+		return nil
+	}
+	if _, ok := p.consume(RightParen, "expect ')' after condition"); !ok {
+		return nil
+	}
+	body := p.statement()
+	if body == nil {
+		return nil
+	}
+	return &whileStmt{
+		condition: condition,
+		body:      body}
+}
+
+func (p *parser) ifStatement() stmt {
+	if _, ok := p.consume(LeftParen, "expect '(' after 'if'"); !ok {
+		return nil
+	}
+	condition := p.expression()
+	if condition == nil {
+		return nil
+	}
+	if _, ok := p.consume(RightParen, "expect ')' after if condition"); !ok {
+		return nil
+	}
+
+	thenBranch := p.statement()
+	if thenBranch == nil {
+		return nil
+	}
+	var elseBranch stmt
+
+	if p.match(Else) {
+		elseBranch = p.statement()
+		if elseBranch == nil {
+			return nil
+		}
+	}
+
+	return &ifStmt{
+		condition:  condition,
+		thenBranch: thenBranch,
+		elseBranch: elseBranch}
 }
 
 func (p *parser) printStatement() stmt {
@@ -76,7 +214,8 @@ func (p *parser) printStatement() stmt {
 		return nil
 	}
 
-	return &printStmt{value}
+	return &printStmt{
+		expr: value}
 }
 
 func (p *parser) blockStatement() []stmt {
@@ -92,7 +231,9 @@ func (p *parser) blockStatement() []stmt {
 		statements = append(statements, stmt)
 	}
 
-	p.consume(RightBrace, "Expect '}' after block")
+	if _, ok := p.consume(RightBrace, "Expect '}' after block"); !ok {
+		return nil
+	}
 	return statements
 }
 
@@ -113,7 +254,7 @@ func (p *parser) expression() expr {
 }
 
 func (p *parser) assignment() expr {
-	expr := p.equality()
+	expr := p.or()
 
 	if p.match(Equal) {
 		equals := p.previous()
@@ -130,6 +271,43 @@ func (p *parser) assignment() expr {
 
 		p.parseError(equals, "invalid assignment target")
 		return nil
+	}
+	return expr
+}
+
+func (p *parser) or() expr {
+	expr := p.and()
+	if expr == nil {
+		return nil
+	}
+	for p.match(Or) {
+		operator := p.previous()
+		right := p.and()
+		if right == nil {
+			return nil
+		}
+
+		expr = &logical{
+			left:     expr,
+			operator: operator,
+			right:    right}
+	}
+
+	return expr
+}
+
+func (p *parser) and() expr {
+	expr := p.equality()
+	if expr == nil {
+		return nil
+	}
+	for p.match(And) {
+		operator := p.previous()
+		right := p.equality()
+		if right == nil {
+			return nil
+		}
+		expr = &logical{left: expr, operator: operator, right: right}
 	}
 	return expr
 }

@@ -45,9 +45,42 @@ func (i *interpreter) execute(stmt stmt) error {
 		return nil
 	case *blockStmt:
 		return i.executeBlock(v.statements, newEnclosedEnvironment(i.env))
+	case *ifStmt:
+		value, err := i.evaluate(v.condition)
+		if err != nil {
+			return err
+		}
+
+		if isTruthy(value) {
+			return i.execute(v.thenBranch)
+
+		}
+
+		if v.elseBranch != nil {
+			return i.execute(v.elseBranch)
+		}
+		return nil
+	case *whileStmt:
+		for {
+			value, err := i.evaluate(v.condition)
+			if err != nil {
+				return err
+			}
+
+			if !isTruthy(value) {
+				break
+			}
+			if err := i.execute(v.body); err != nil {
+				return err
+			}
+		}
+
+		return nil
+
 	default:
 		return fmt.Errorf("unknown statement type")
 	}
+
 }
 
 func (i *interpreter) executeBlock(statements []stmt, env *environment) error {
@@ -82,6 +115,23 @@ func (i *interpreter) evaluate(e expr) (any, error) {
 		}
 
 		return value, nil
+	case *logical:
+		left, err := i.evaluate(v.left)
+		if err != nil {
+			return nil, err
+		}
+
+		if v.operator.typ == Or {
+			if isTruthy(left) {
+				return left, nil
+			}
+		} else {
+			if !isTruthy(left) {
+				return left, nil
+			}
+		}
+		return i.evaluate(v.right)
+
 	case *literal:
 		return v.value, nil
 
