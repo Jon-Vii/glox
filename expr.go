@@ -49,3 +49,11 @@ type logical struct {
 }
 
 func (l *logical) isExpr() {}
+
+type call struct {
+	callee    expr
+	paren     token
+	arguments []expr
+}
+
+func (c *call) isExpr() {}

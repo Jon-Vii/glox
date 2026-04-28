@@ -43,12 +43,12 @@ func run(source string, intr *interpreter) {
 		tokens:  scanner.tokens,
 	}
 
-	expr := parser.parse()
-	if hadError || expr == nil {
+	statements := parser.parse()
+	if hadError {
 		return
 	}
 
-	if err := intr.interpret(expr); err != nil {
+	if err := intr.interpret(statements); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
 	/*
@@ -62,9 +62,7 @@ func runFile(path string) error {
 		return err
 	}
 
-	intr := &interpreter{
-		env: newEnvironment(),
-	}
+	intr := newInterpreter()
 	run(string(bytes), intr)
 
 	if hadError {
@@ -76,9 +74,7 @@ func runFile(path string) error {
 
 func runPrompt() error {
 	input := bufio.NewScanner(os.Stdin)
-	intr := &interpreter{
-		env: newEnvironment(),
-	}
+	intr := newInterpreter()
 
 	for {
 		fmt.Print("> ")

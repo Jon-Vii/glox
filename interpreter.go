@@ -6,7 +6,18 @@ import (
 )
 
 type interpreter struct {
-	env *environment
+	globals *environment
+	env     *environment
+}
+
+func newInterpreter() *interpreter {
+	globals := newEnvironment()
+	globals.define("clock", nativeClock{})
+
+	return &interpreter{
+		globals: globals,
+		env:     globals,
+	}
 }
 
 func (i *interpreter) interpret(statements []stmt) error {
@@ -31,6 +42,7 @@ func (i *interpreter) execute(stmt stmt) error {
 	case *exprStmt:
 		_, err := i.evaluate(v.expr)
 		return err
+
 	case *varStmt:
 		var value any = nil
 		if v.initializer != nil {
@@ -43,8 +55,10 @@ func (i *interpreter) execute(stmt stmt) error {
 
 		i.env.define(v.name.lexeme, value)
 		return nil
+
 	case *blockStmt:
 		return i.executeBlock(v.statements, newEnclosedEnvironment(i.env))
+
 	case *ifStmt:
 		value, err := i.evaluate(v.condition)
 		if err != nil {
@@ -60,6 +74,7 @@ func (i *interpreter) execute(stmt stmt) error {
 			return i.execute(v.elseBranch)
 		}
 		return nil
+
 	case *whileStmt:
 		for {
 			value, err := i.evaluate(v.condition)
@@ -76,6 +91,29 @@ func (i *interpreter) execute(stmt stmt) error {
 		}
 
 		return nil
+
+	case *functionStmt:
+		fn := &functionValue{
+			declaration: v,
+			closure:     i.env,
+		}
+		i.env.define(v.name.lexeme, fn)
+
+		return nil
+
+	case *returnStmt:
+		var value any
+		if v.value != nil {
+			result, err := i.evaluate(v.value)
+			if err != nil {
+				return err
+			}
+			value = result
+		}
+
+		return &returnValue{
+			value: value,
+		}
 
 	default:
 		return fmt.Errorf("unknown statement type")
@@ -115,6 +153,32 @@ func (i *interpreter) evaluate(e expr) (any, error) {
 		}
 
 		return value, nil
+	case *call:
+		callee, err := i.evaluate(v.callee)
+		if err != nil {
+			return nil, err
+		}
+
+		var arguments []any
+		for _, argument := range v.arguments {
+			value, err := i.evaluate(argument)
+			if err != nil {
+				return nil, err
+			}
+			arguments = append(arguments, value)
+		}
+
+		function, ok := callee.(callable)
+		if !ok {
+			return nil, fmt.Errorf("can only call functions and classes")
+		}
+
+		arity := function.arity()
+		if len(arguments) != arity {
+			return nil, fmt.Errorf("expected %d arguments but got %d", arity, len(arguments))
+		}
+
+		return function.call(i, arguments)
 	case *logical:
 		left, err := i.evaluate(v.left)
 		if err != nil {

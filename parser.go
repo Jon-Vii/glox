@@ -27,6 +27,9 @@ func (p *parser) declaration() stmt {
 	if p.match(Var) {
 		return p.varDeclaration()
 	}
+	if p.match(Fun) {
+		return p.function("function")
+	}
 	return p.statement()
 
 }
@@ -54,6 +57,53 @@ func (p *parser) varDeclaration() stmt {
 	}
 }
 
+func (p *parser) function(kind string) stmt {
+	name, ok := p.consume(Identifier, "expect "+kind+" name")
+	if !ok {
+		return nil
+	}
+
+	if _, ok := p.consume(LeftParen, "expect '(' after "+kind+" name"); !ok {
+		return nil
+	}
+
+	var parameters []token
+	if !p.check(RightParen) {
+		for {
+			if len(parameters) >= 255 {
+				p.parseError(p.peek(), "can't have more than 255 parameters")
+			}
+			parameter, ok := p.consume(Identifier, "expect parameter name")
+			if !ok {
+				return nil
+			}
+			parameters = append(parameters, parameter)
+
+			if !p.match(Comma) {
+				break
+			}
+		}
+	}
+
+	if _, ok := p.consume(RightParen, "expect ')' after parameters"); !ok {
+		return nil
+	}
+	if _, ok := p.consume(LeftBrace, "expect '{' before "+kind+" body"); !ok {
+		return nil
+	}
+
+	body := p.blockStatement()
+	if body == nil {
+		return nil
+	}
+
+	return &functionStmt{
+		name:   name,
+		params: parameters,
+		body:   body,
+	}
+}
+
 func (p *parser) statement() stmt {
 	if p.match(Print) {
 		return p.printStatement()
@@ -75,8 +125,32 @@ func (p *parser) statement() stmt {
 	if p.match(If) {
 		return p.ifStatement()
 	}
+	if p.match(Return) {
+		return p.returnStatement()
+	}
 
 	return p.expressionStatement()
+}
+
+func (p *parser) returnStatement() stmt {
+	keyword := p.previous()
+
+	var value expr
+	if !p.check(Semicolon) {
+		value = p.expression()
+		if value == nil {
+			return nil
+		}
+	}
+
+	if _, ok := p.consume(Semicolon, "expect ';' after return value"); !ok {
+		return nil
+	}
+
+	return &returnStmt{
+		keyword: keyword,
+		value:   value,
+	}
 }
 
 func (p *parser) forStatement() stmt {
@@ -405,7 +479,51 @@ func (p *parser) unary() expr {
 			right:    right,
 		}
 	}
-	return p.primary()
+	return p.call()
+}
+
+func (p *parser) call() expr {
+	expr := p.primary()
+
+	// parse zero or more function calls e.g getCallback()()
+	for p.match(LeftParen) {
+		expr = p.finishCall(expr)
+	}
+
+	return expr
+}
+
+func (p *parser) finishCall(callee expr) expr {
+	var arguments []expr
+
+	// parse comma-separated args
+	if !p.check(RightParen) {
+		for {
+			if len(arguments) >= 255 {
+				p.parseError(p.peek(), "can't have more than 255 arguments")
+			}
+			expr := p.expression()
+			if expr == nil {
+				return nil
+			}
+
+			arguments = append(arguments, expr)
+
+			if !p.match(Comma) {
+				break
+			}
+		}
+	}
+	paren, ok := p.consume(RightParen, "Expect ')' after arguments")
+	if !ok {
+		return nil
+	}
+
+	return &call{
+		callee:    callee,
+		paren:     paren,
+		arguments: arguments,
+	}
 }
 
 func (p *parser) primary() expr {

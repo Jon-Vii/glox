@@ -41,3 +41,18 @@ type whileStmt struct {
 }
 
 func (w *whileStmt) isStmt() {}
+
+type functionStmt struct {
+	name   token
+	params []token
+	body   []stmt
+}
+
+func (f *functionStmt) isStmt() {}
+
+type returnStmt struct {
+	keyword token
+	value   expr
+}
+
+func (r *returnStmt) isStmt() {}
