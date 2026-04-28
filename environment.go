@@ -52,3 +52,19 @@ func (e *environment) assign(name token, value any) error {
 
 	return fmt.Errorf("%s", "undefined variable '"+name.lexeme+"'")
 }
+
+func (e *environment) getAt(distance int, name string) any {
+	return e.ancestor(distance).values[name]
+}
+
+func (e *environment) assignAt(distance int, name token, value any) {
+	e.ancestor(distance).values[name.lexeme] = value
+}
+
+func (e *environment) ancestor(distance int) *environment {
+	env := e
+	for range distance {
+		env = env.enclosing
+	}
+	return env
+}

@@ -8,6 +8,7 @@ import (
 type interpreter struct {
 	globals *environment
 	env     *environment
+	locals  map[expr]int
 }
 
 func newInterpreter() *interpreter {
@@ -17,7 +18,12 @@ func newInterpreter() *interpreter {
 	return &interpreter{
 		globals: globals,
 		env:     globals,
+		locals:  make(map[expr]int),
 	}
+}
+
+func (i *interpreter) resolve(e expr, depth int) {
+	i.locals[e] = depth
 }
 
 func (i *interpreter) interpret(statements []stmt) error {
@@ -27,6 +33,13 @@ func (i *interpreter) interpret(statements []stmt) error {
 		}
 	}
 	return nil
+}
+
+func (i *interpreter) lookUpVariable(name token, e expr) (any, error) {
+	if distance, ok := i.locals[e]; ok {
+		return i.env.getAt(distance, name.lexeme), nil
+	}
+	return i.globals.get(name)
 }
 
 func (i *interpreter) execute(stmt stmt) error {
@@ -141,18 +154,22 @@ func (i *interpreter) executeBlock(statements []stmt, env *environment) error {
 func (i *interpreter) evaluate(e expr) (any, error) {
 	switch v := e.(type) {
 	case *variable:
-		return i.env.get(v.name)
+		return i.lookUpVariable(v.name, v)
+
 	case *assign:
 		value, err := i.evaluate(v.value)
 		if err != nil {
 			return nil, err
 		}
 
-		if err := i.env.assign(v.name, value); err != nil {
+		if distance, ok := i.locals[v]; ok {
+			i.env.assignAt(distance, v.name, value)
+		} else if err := i.globals.assign(v.name, value); err != nil {
 			return nil, err
 		}
 
 		return value, nil
+
 	case *call:
 		callee, err := i.evaluate(v.callee)
 		if err != nil {
@@ -179,6 +196,7 @@ func (i *interpreter) evaluate(e expr) (any, error) {
 		}
 
 		return function.call(i, arguments)
+
 	case *logical:
 		left, err := i.evaluate(v.left)
 		if err != nil {

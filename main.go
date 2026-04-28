@@ -48,6 +48,15 @@ func run(source string, intr *interpreter) {
 		return
 	}
 
+	resolver := resolver{
+		interpreter: intr,
+	}
+
+	resolver.resolveStatements(statements)
+	if hadError {
+		return
+	}
+
 	if err := intr.interpret(statements); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
