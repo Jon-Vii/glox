@@ -43,6 +43,12 @@ func (p *parser) classDeclaration() stmt {
 		return nil
 	}
 
+	var superclass *variable
+	if p.match(Less) {
+		p.consume(Identifier, "expect superclass name")
+		superclass = &variable{name: p.previous()}
+	}
+
 	if _, ok := p.consume(LeftBrace, "expect '{' before class body"); !ok {
 		return nil
 	}
@@ -61,8 +67,9 @@ func (p *parser) classDeclaration() stmt {
 	}
 
 	return &classStmt{
-		name:    name,
-		methods: methods,
+		name:       name,
+		superclass: superclass,
+		methods:    methods,
 	}
 }
 
@@ -593,6 +600,25 @@ func (p *parser) primary() expr {
 
 	if p.match(Number, String) {
 		return &literal{value: p.previous().literal}
+	}
+
+	if p.match(Super) {
+		keyword := p.previous()
+
+		if _, ok := p.consume(Dot, "expect '.' after 'super'"); !ok {
+			return nil
+		}
+
+		method, ok := p.consume(Identifier, "expect superclass method name")
+		if !ok {
+			return nil
+		}
+
+		return &super{
+			keyword: keyword,
+			method:  method,
+		}
+
 	}
 
 	if p.match(This) {

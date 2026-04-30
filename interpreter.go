@@ -73,7 +73,26 @@ func (i *interpreter) execute(stmt stmt) error {
 		return i.executeBlock(v.statements, newEnclosedEnvironment(i.env))
 
 	case *classStmt:
+		var superclass *classValue
+		if v.superclass != nil {
+			value, err := i.evaluate(v.superclass)
+			if err != nil {
+				return err
+			}
+			class, ok := value.(*classValue)
+			if !ok {
+				return fmt.Errorf("%s superclass must be a class", superclass.name)
+			}
+			superclass = class
+		}
+
 		i.env.define(v.name.lexeme, nil)
+
+		if v.superclass != nil {
+			i.env = newEnclosedEnvironment(i.env)
+			i.env.define("super", superclass)
+		}
+
 		methods := make(map[string]*functionValue)
 		for _, method := range v.methods {
 			function := &functionValue{
@@ -84,9 +103,15 @@ func (i *interpreter) execute(stmt stmt) error {
 			methods[method.name.lexeme] = function
 		}
 		class := &classValue{
-			name:    v.name.lexeme,
-			methods: methods,
+			name:       v.name.lexeme,
+			superclass: superclass,
+			methods:    methods,
 		}
+
+		if v.superclass != nil {
+			i.env = i.env.enclosing
+		}
+
 		if err := i.env.assign(v.name, class); err != nil {
 			return err
 		}
@@ -250,6 +275,29 @@ func (i *interpreter) evaluate(e expr) (any, error) {
 
 		instance.set(v.name, value)
 		return value, nil
+
+	case *super:
+		distance, ok := i.locals[v]
+
+		if !ok {
+			return nil, fmt.Errorf("unresolved super expression")
+		}
+		superclass, ok := i.env.getAt(distance, "super").(*classValue)
+		if !ok {
+			return nil, fmt.Errorf("super is not a class")
+		}
+
+		object, ok := i.env.getAt(distance-1, "this").(*instanceValue)
+		if !ok {
+			return nil, fmt.Errorf("this is not an instance")
+		}
+
+		method, ok := superclass.findMethod(v.method.lexeme)
+		if !ok {
+			return nil, fmt.Errorf("undefined property %q", v.method.lexeme)
+		}
+
+		return method.bind(object), nil
 
 	case *this:
 		value, err := i.lookUpVariable(v.keyword, e)

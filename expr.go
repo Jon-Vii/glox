@@ -78,3 +78,10 @@ type this struct {
 }
 
 func (t *this) isExpr() {}
+
+type super struct {
+	keyword token
+	method  token
+}
+
+func (s *super) isExpr() {}

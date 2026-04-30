@@ -3,8 +3,9 @@ package main
 import "fmt"
 
 type classValue struct {
-	name    string
-	methods map[string]*functionValue
+	name       string
+	superclass *classValue
+	methods    map[string]*functionValue
 }
 
 func (c *classValue) arity() int {
@@ -34,7 +35,16 @@ func (c *classValue) call(i *interpreter, args []any) (any, error) {
 
 func (c *classValue) findMethod(name string) (*functionValue, bool) {
 	method, ok := c.methods[name]
-	return method, ok
+	if ok {
+		return method, true
+	}
+
+	if c.superclass != nil {
+		return c.superclass.findMethod(name)
+	}
+
+	return nil, false
+
 }
 
 func (c *classValue) String() string {

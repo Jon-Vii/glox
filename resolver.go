@@ -21,6 +21,7 @@ type classType int
 const (
 	classNone classType = iota
 	classClass
+	classSubclass
 )
 
 func (r *resolver) resolveLocal(e expr, name token) {
@@ -93,6 +94,20 @@ func (r *resolver) resolveStmt(s stmt) {
 		r.declare(v.name)
 		r.define(v.name)
 
+		if v.superclass != nil && v.name.lexeme == v.superclass.name.lexeme {
+			reportTokenError(v.superclass.name, "a class can't inherit from itself")
+		}
+
+		if v.superclass != nil {
+			r.currentClass = classSubclass
+			r.resolveExpr(v.superclass)
+		}
+
+		if v.superclass != nil {
+			r.beginScope()
+			r.currentScope()["super"] = true
+		}
+
 		r.beginScope()
 		r.currentScope()["this"] = true
 
@@ -106,6 +121,10 @@ func (r *resolver) resolveStmt(s stmt) {
 		}
 
 		r.endScope()
+
+		if v.superclass != nil {
+			r.endScope()
+		}
 
 		r.currentClass = enclosingClass
 	}
@@ -155,6 +174,16 @@ func (r *resolver) resolveExpr(e expr) {
 	case *set:
 		r.resolveExpr(v.value)
 		r.resolveExpr(v.object)
+
+	case *super:
+		if r.currentClass == classNone {
+			reportTokenError(v.keyword, "can't use 'super' outside of a class")
+
+		} else if r.currentClass != classSubclass {
+			reportTokenError(v.keyword, "can't use 'super in a class with no superclass")
+		}
+
+		r.resolveLocal(v, v.keyword)
 
 	case *this:
 		if r.currentClass == classNone {

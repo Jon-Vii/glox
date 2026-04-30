@@ -58,8 +58,9 @@ type returnStmt struct {
 func (r *returnStmt) isStmt() {}
 
 type classStmt struct {
-	name    token
-	methods []*functionStmt
+	name       token
+	superclass *variable
+	methods    []*functionStmt
 }
 
 func (c *classStmt) isStmt() {}
