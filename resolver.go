@@ -4,6 +4,7 @@ type resolver struct {
 	interpreter     *interpreter
 	scopes          []map[string]bool
 	currentFunction functionType
+	currentClass    classType
 }
 
 type functionType int
@@ -11,6 +12,15 @@ type functionType int
 const (
 	functionNone functionType = iota
 	functionFunction
+	functionInitializer
+	functionMethod
+)
+
+type classType int
+
+const (
+	classNone classType = iota
+	classClass
 )
 
 func (r *resolver) resolveLocal(e expr, name token) {
@@ -47,11 +57,13 @@ func (r *resolver) resolveStmt(s stmt) {
 		r.beginScope()
 		r.resolveStatements(v.statements)
 		r.endScope()
+
 	case *exprStmt:
 		r.resolveExpr(v.expr)
 
 	case *printStmt:
 		r.resolveExpr(v.expr)
+
 	case *ifStmt:
 		r.resolveExpr(v.condition)
 		r.resolveStmt(v.thenBranch)
@@ -66,12 +78,36 @@ func (r *resolver) resolveStmt(s stmt) {
 	case *returnStmt:
 		if r.currentFunction == functionNone {
 			reportTokenError(v.keyword, "can't return from top-level code")
+		} else if r.currentFunction == functionInitializer {
+			reportTokenError(v.keyword, "can't return a value from an initializer")
 		}
 
 		if v.value != nil {
 			r.resolveExpr(v.value)
 		}
 
+	case *classStmt:
+		enclosingClass := r.currentClass
+		r.currentClass = classClass
+
+		r.declare(v.name)
+		r.define(v.name)
+
+		r.beginScope()
+		r.currentScope()["this"] = true
+
+		for _, method := range v.methods {
+			declaration := functionMethod
+			if method.name.lexeme == "init" {
+				declaration = functionInitializer
+			}
+
+			r.resolveFunction(method, declaration)
+		}
+
+		r.endScope()
+
+		r.currentClass = enclosingClass
 	}
 
 }
@@ -112,8 +148,20 @@ func (r *resolver) resolveExpr(e expr) {
 
 	case *literal:
 		// nothing to resolve
-	}
 
+	case *get:
+		r.resolveExpr(v.object)
+
+	case *set:
+		r.resolveExpr(v.value)
+		r.resolveExpr(v.object)
+
+	case *this:
+		if r.currentClass == classNone {
+			reportTokenError(v.keyword, "can't use 'this' outside of a class")
+		}
+		r.resolveLocal(v, v.keyword)
+	}
 }
 
 func (r *resolver) resolveFunction(f *functionStmt, typ functionType) {

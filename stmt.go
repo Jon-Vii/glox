@@ -56,3 +56,10 @@ type returnStmt struct {
 }
 
 func (r *returnStmt) isStmt() {}
+
+type classStmt struct {
+	name    token
+	methods []*functionStmt
+}
+
+func (c *classStmt) isStmt() {}

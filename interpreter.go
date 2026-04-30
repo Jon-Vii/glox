@@ -72,6 +72,27 @@ func (i *interpreter) execute(stmt stmt) error {
 	case *blockStmt:
 		return i.executeBlock(v.statements, newEnclosedEnvironment(i.env))
 
+	case *classStmt:
+		i.env.define(v.name.lexeme, nil)
+		methods := make(map[string]*functionValue)
+		for _, method := range v.methods {
+			function := &functionValue{
+				declaration:   method,
+				closure:       i.env,
+				isInitializer: method.name.lexeme == "init",
+			}
+			methods[method.name.lexeme] = function
+		}
+		class := &classValue{
+			name:    v.name.lexeme,
+			methods: methods,
+		}
+		if err := i.env.assign(v.name, class); err != nil {
+			return err
+		}
+
+		return nil
+
 	case *ifStmt:
 		value, err := i.evaluate(v.condition)
 		if err != nil {
@@ -107,8 +128,9 @@ func (i *interpreter) execute(stmt stmt) error {
 
 	case *functionStmt:
 		fn := &functionValue{
-			declaration: v,
-			closure:     i.env,
+			declaration:   v,
+			closure:       i.env,
+			isInitializer: false,
 		}
 		i.env.define(v.name.lexeme, fn)
 
@@ -196,6 +218,45 @@ func (i *interpreter) evaluate(e expr) (any, error) {
 		}
 
 		return function.call(i, arguments)
+
+	case *get:
+		object, err := i.evaluate(v.object)
+		if err != nil {
+			return nil, err
+		}
+
+		instance, ok := object.(*instanceValue)
+		if !ok {
+			return nil, fmt.Errorf("only instances have properties")
+		}
+
+		return instance.get(v.name)
+
+	case *set:
+		object, err := i.evaluate(v.object)
+		if err != nil {
+			return nil, err
+		}
+
+		instance, ok := object.(*instanceValue)
+		if !ok {
+			return nil, fmt.Errorf("only instances have fields")
+		}
+
+		value, err := i.evaluate(v.value)
+		if err != nil {
+			return nil, err
+		}
+
+		instance.set(v.name, value)
+		return value, nil
+
+	case *this:
+		value, err := i.lookUpVariable(v.keyword, e)
+		if err != nil {
+			return nil, err
+		}
+		return value, nil
 
 	case *logical:
 		left, err := i.evaluate(v.left)

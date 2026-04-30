@@ -30,8 +30,40 @@ func (p *parser) declaration() stmt {
 	if p.match(Fun) {
 		return p.function("function")
 	}
+	if p.match(Class) {
+		return p.classDeclaration()
+	}
 	return p.statement()
 
+}
+
+func (p *parser) classDeclaration() stmt {
+	name, ok := p.consume(Identifier, "expect class name")
+	if !ok {
+		return nil
+	}
+
+	if _, ok := p.consume(LeftBrace, "expect '{' before class body"); !ok {
+		return nil
+	}
+
+	var methods []*functionStmt
+	for !p.check(RightBrace) && !p.isAtEnd() {
+		method := p.function("method")
+		if method == nil {
+			return nil
+		}
+		methods = append(methods, method)
+	}
+
+	if _, ok := p.consume(RightBrace, "expect '}' after class body"); !ok {
+		return nil
+	}
+
+	return &classStmt{
+		name:    name,
+		methods: methods,
+	}
 }
 
 func (p *parser) varDeclaration() stmt {
@@ -57,7 +89,7 @@ func (p *parser) varDeclaration() stmt {
 	}
 }
 
-func (p *parser) function(kind string) stmt {
+func (p *parser) function(kind string) *functionStmt {
 	name, ok := p.consume(Identifier, "expect "+kind+" name")
 	if !ok {
 		return nil
@@ -340,7 +372,16 @@ func (p *parser) assignment() expr {
 
 		if v, ok := expr.(*variable); ok {
 			name := v.name
-			return &assign{name: name, value: value}
+			return &assign{
+				name:  name,
+				value: value,
+			}
+		} else if v, ok := expr.(*get); ok {
+			return &set{
+				object: v.object,
+				name:   v.name,
+				value:  value,
+			}
 		}
 
 		p.parseError(equals, "invalid assignment target")
@@ -486,8 +527,21 @@ func (p *parser) call() expr {
 	expr := p.primary()
 
 	// parse zero or more function calls e.g getCallback()()
-	for p.match(LeftParen) {
-		expr = p.finishCall(expr)
+	for {
+		if p.match(LeftParen) {
+			expr = p.finishCall(expr)
+		} else if p.match(Dot) {
+			name, ok := p.consume(Identifier, "expect property name after '.'")
+			if !ok {
+				return nil
+			}
+			expr = &get{
+				object: expr,
+				name:   name,
+			}
+		} else {
+			break
+		}
 	}
 
 	return expr
@@ -539,6 +593,10 @@ func (p *parser) primary() expr {
 
 	if p.match(Number, String) {
 		return &literal{value: p.previous().literal}
+	}
+
+	if p.match(This) {
+		return &this{keyword: p.previous()}
 	}
 
 	if p.match(Identifier) {

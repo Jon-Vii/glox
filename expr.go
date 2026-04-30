@@ -57,3 +57,24 @@ type call struct {
 }
 
 func (c *call) isExpr() {}
+
+type get struct {
+	object expr
+	name   token
+}
+
+func (g *get) isExpr() {}
+
+type set struct {
+	object expr
+	name   token
+	value  expr
+}
+
+func (s *set) isExpr() {}
+
+type this struct {
+	keyword token
+}
+
+func (t *this) isExpr() {}
